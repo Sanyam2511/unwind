@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+/* Unwind Custom Styles */
+#unwind-extension-root {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: 999999;
+  pointer-events: none; /* Let clicks pass through to the page */
+}
+
+/* Allow pointer events for tooltip cards */
+.unwind-card {
+  pointer-events: auto;
+}

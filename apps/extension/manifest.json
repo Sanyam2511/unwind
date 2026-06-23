@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Unwind",
+  "version": "1.0.0",
+  "description": "Contextual Literacy Engine - Translate complex text to plain English.",
+  "permissions": ["activeTab", "scripting"],
+  "action": {
+    "default_popup": "index.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content.tsx"]
+    }
+  ]
+}
