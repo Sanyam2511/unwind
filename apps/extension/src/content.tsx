@@ -42,12 +42,47 @@ const ContentApp = () => {
     x: number;
     y: number;
     text: string;
+    loading: boolean;
+    simplifiedText?: string;
+    error?: string;
   }>({
     visible: false,
     x: 0,
     y: 0,
     text: '',
+    loading: false,
   });
+
+  const fetchTranslation = async (text: string) => {
+    try {
+      const response = await fetch('http://localhost:3000/api/simplify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch translation from server');
+      }
+
+      const data = await response.json();
+      
+      setTooltipState(prev => ({
+        ...prev,
+        loading: false,
+        simplifiedText: data.simplifiedText,
+      }));
+    } catch (err) {
+      console.error("Unwind API Error:", err);
+      setTooltipState(prev => ({
+        ...prev,
+        loading: false,
+        error: "Could not connect to the Unwind server. Is the local backend running?",
+      }));
+    }
+  };
 
   useEffect(() => {
     let debounceTimer: ReturnType<typeof setTimeout>;
@@ -73,7 +108,13 @@ const ContentApp = () => {
               x,
               y,
               text: selectedText,
+              loading: true,
+              simplifiedText: undefined,
+              error: undefined,
             });
+
+            // Trigger the API call
+            fetchTranslation(selectedText);
           }
         }
       }, 500); // 500ms debounce
@@ -82,9 +123,6 @@ const ContentApp = () => {
     const handleMouseDown = (event: MouseEvent) => {
       // If the user clicks outside the tooltip (which is outside the shadow DOM bounds normally)
       // We can just close it if they start a new selection
-      // But we should ensure we don't close it if they click inside the tooltip.
-      // Since the click happens on the document, and the tooltip is in the shadow DOM, 
-      // the event target will be the host element if clicked inside.
       if (event.target !== hostElement) {
         setTooltipState(prev => ({ ...prev, visible: false }));
       }
@@ -107,6 +145,9 @@ const ContentApp = () => {
       x={tooltipState.x} 
       y={tooltipState.y} 
       text={tooltipState.text} 
+      simplifiedText={tooltipState.simplifiedText}
+      loading={tooltipState.loading}
+      error={tooltipState.error}
       onClose={() => setTooltipState(prev => ({ ...prev, visible: false }))} 
     />
   );
