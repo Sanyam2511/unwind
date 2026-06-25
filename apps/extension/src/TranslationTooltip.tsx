@@ -15,7 +15,7 @@ export const TranslationTooltip: React.FC<TranslationTooltipProps> = ({
 }) => {
   return (
     <div
-      className="fixed z-[999999] w-80 bg-white/95 backdrop-blur-md border border-gray-200 shadow-xl rounded-2xl p-5 text-gray-800 font-sans animate-in fade-in zoom-in-95 duration-200"
+      className="absolute z-[999999] w-80 bg-white/95 backdrop-blur-md border border-gray-200 shadow-xl rounded-2xl p-5 text-gray-800 font-sans animate-in fade-in zoom-in-95 duration-200"
       style={{
         left: `${x}px`,
         top: `${y}px`,
