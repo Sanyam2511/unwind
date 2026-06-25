@@ -38,7 +38,7 @@ app.post('/api/simplify', async (req, res) => {
 
     // 1. Check Database (Cache)
     if (mockDatabase.has(hash)) {
-        console.log(`[CACHE HIT] Serving from memory for hash: ${hash}`);
+        console.log(`⚡ [CACHE HIT] Hash: ${hash.substring(0, 8)}... - Returned instantly (0ms)`);
         return res.json({
             success: true,
             source: 'cache',
@@ -47,7 +47,7 @@ app.post('/api/simplify', async (req, res) => {
         });
     }
 
-    console.log(`[CACHE MISS] Generating new translation for hash: ${hash}`);
+    console.log(`⏳ [CACHE MISS] Hash: ${hash.substring(0, 8)}... - Generating translation (simulating 800ms API delay)...`);
     
     // 2. Sanitize Data
     const sanitizedText = sanitizeText(text);
