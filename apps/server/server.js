@@ -29,12 +29,12 @@ function generateHash(text) {
 }
 
 app.post('/api/simplify', async (req, res) => {
-    const { text } = req.body;
+    const { text, mode = 'translation', context = '' } = req.body;
     if (!text) {
         return res.status(400).json({ error: 'Text is required' });
     }
 
-    const hash = generateHash(text);
+    const hash = generateHash(mode + ":" + text);
 
     // 1. Check Cache
     if (mockDatabase.has(hash)) {
@@ -51,6 +51,15 @@ app.post('/api/simplify', async (req, res) => {
     
     // 2. Sanitize Data
     const sanitizedText = sanitizeText(text);
+    const sanitizedContext = sanitizeText(context);
+
+    let systemPrompt = "You are the 'Contextual Literacy Engine', an expert at translating dense legal, medical, financial, or corporate jargon into simple, plain English that an 8th grader can understand. Your output will be displayed in a tiny tooltip hovering over text. Be extremely concise. Do not use pleasantries. Do not start with 'This means'. Just output the direct, plain English translation of the user's text.";
+    let userPrompt = sanitizedText;
+
+    if (mode === 'dictionary') {
+        systemPrompt = "You are the 'Contextual Dictionary Engine'. The user will provide a specific word or short phrase, followed by the surrounding sentence for context. Your job is to provide a very brief, simple definition of that word exactly as it is being used in that specific context. Be extremely concise. Do not use pleasantries. Just output the definition.";
+        userPrompt = `Word/Phrase: "${sanitizedText}"\n\nContext Sentence: "${sanitizedContext}"`;
+    }
 
     try {
         // 3. Call AI API
@@ -58,11 +67,11 @@ app.post('/api/simplify', async (req, res) => {
             messages: [
                 {
                     role: "system",
-                    content: "You are the 'Contextual Literacy Engine', an expert at translating dense legal, medical, financial, or corporate jargon into simple, plain English that an 8th grader can understand. Your output will be displayed in a tiny tooltip hovering over text. Be extremely concise. Do not use pleasantries. Do not start with 'This means'. Just output the direct, plain English translation of the user's text."
+                    content: systemPrompt
                 },
                 {
                     role: "user",
-                    content: sanitizedText
+                    content: userPrompt
                 }
             ],
             model: "llama-3.3-70b-versatile",
