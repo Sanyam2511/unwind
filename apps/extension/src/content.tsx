@@ -53,14 +53,14 @@ const ContentApp = () => {
     loading: false,
   });
 
-  const fetchTranslation = async (text: string) => {
+  const fetchTranslation = async (text: string, mode: 'translation' | 'dictionary', context: string) => {
     try {
       const response = await fetch('http://localhost:3000/api/simplify', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, mode, context }),
       });
 
       if (!response.ok) {
@@ -94,7 +94,17 @@ const ContentApp = () => {
         const selection = window.getSelection();
         const selectedText = selection?.toString().trim();
 
-        if (selectedText && selectedText.length > 5) {
+        if (selectedText && selectedText.length > 2) {
+          // Determine mode based on word count
+          const wordCount = selectedText.split(/\s+/).filter(word => word.length > 0).length;
+          const mode = wordCount <= 3 ? 'dictionary' : 'translation';
+
+          // Extract surrounding context
+          let context = selectedText;
+          if (selection && selection.anchorNode && selection.anchorNode.textContent) {
+              context = selection.anchorNode.textContent.trim();
+          }
+
           // Calculate where to place the tooltip
           const range = selection?.getRangeAt(0);
           if (range) {
@@ -114,7 +124,7 @@ const ContentApp = () => {
             });
 
             // Trigger the API call
-            fetchTranslation(selectedText);
+            fetchTranslation(selectedText, mode, context);
           }
         }
       }, 500); // 500ms debounce
