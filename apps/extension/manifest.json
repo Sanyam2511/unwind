@@ -3,7 +3,14 @@
   "name": "Unwind",
   "version": "1.0.0",
   "description": "Contextual Literacy Engine - Translate complex text to plain English.",
-  "permissions": ["activeTab", "scripting"],
+  "permissions": ["activeTab", "scripting", "contextMenus", "sidePanel", "storage"],
+  "background": {
+    "service_worker": "src/background.ts",
+    "type": "module"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
   "action": {
     "default_popup": "index.html"
   },
