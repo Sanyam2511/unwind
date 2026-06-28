@@ -29,12 +29,12 @@ function generateHash(text) {
 }
 
 app.post('/api/simplify', async (req, res) => {
-    const { text, mode = 'translation', context = '' } = req.body;
+    const { text, mode = 'translation', context = '', readingLevel = '8th Grader' } = req.body;
     if (!text) {
         return res.status(400).json({ error: 'Text is required' });
     }
 
-    const hash = generateHash(mode + ":" + text);
+    const hash = generateHash(readingLevel + ":" + mode + ":" + text);
 
     // 1. Check Cache
     if (mockDatabase.has(hash)) {
@@ -54,10 +54,17 @@ app.post('/api/simplify', async (req, res) => {
     const sanitizedContext = sanitizeText(context);
 
     let systemPrompt = "You are the 'Contextual Literacy Engine', an expert at translating dense legal, medical, financial, or corporate jargon into simple, plain English that an 8th grader can understand. Your output will be displayed in a tiny tooltip hovering over text. Be extremely concise. Do not use pleasantries. Do not start with 'This means'. Just output the direct, plain English translation of the user's text.";
+
+    if (readingLevel === "Explain Like I'm 5") {
+        systemPrompt = "You are an expert at explaining incredibly complex concepts to a 5-year-old child. Translate the provided text into extremely basic language, using simple analogies where helpful. Your output will be displayed in a tiny tooltip. Be concise. Do not use pleasantries. Just output the translation.";
+    } else if (readingLevel === "Professional") {
+        systemPrompt = "You are an expert analyst. Provide a highly concise, professional summary of the text without losing critical nuances or industry terms. Your output will be displayed in a tiny tooltip. Be direct. Do not use pleasantries. Just output the summary.";
+    }
+
     let userPrompt = sanitizedText;
 
     if (mode === 'dictionary') {
-        systemPrompt = "You are the 'Contextual Dictionary Engine'. The user will provide a specific word or short phrase, followed by the surrounding sentence for context. Your job is to provide a very brief, simple definition of that word exactly as it is being used in that specific context. Be extremely concise. Do not use pleasantries. Just output the definition.";
+        systemPrompt = `You are the 'Contextual Dictionary Engine'. The user will provide a specific word or short phrase, followed by the surrounding sentence for context. Your job is to provide a very brief, simple definition of that word exactly as it is being used in that specific context (Target Audience Level: ${readingLevel}). Be extremely concise. Do not use pleasantries. Just output the definition.`;
         userPrompt = `Word/Phrase: "${sanitizedText}"\n\nContext Sentence: "${sanitizedContext}"`;
     }
 

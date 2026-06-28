@@ -1,122 +1,69 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useState, useEffect } from 'react';
+import './index.css'; // Make sure Tailwind is imported
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [readingLevel, setReadingLevel] = useState('8th Grader');
+
+  useEffect(() => {
+    // Load saved reading level on mount
+    chrome.storage.local.get(['readingLevel'], (result: any) => {
+      if (result.readingLevel) {
+        setReadingLevel(result.readingLevel);
+      }
+    });
+  }, []);
+
+  const handleLevelChange = (level: string) => {
+    setReadingLevel(level);
+    chrome.storage.local.set({ readingLevel: level });
+  };
+
+  const levels = [
+    { id: 'Explain Like I\'m 5', description: 'Maximum simplicity and analogies' },
+    { id: '8th Grader', description: 'Clear, plain English (Default)' },
+    { id: 'Professional', description: 'Concise summary for experts' }
+  ];
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <div className="w-80 p-5 bg-white font-sans text-gray-900 border border-gray-100">
+      <div className="flex items-center gap-2 mb-6 border-b border-gray-200 pb-3">
+        <h1 className="text-xl font-extrabold text-black tracking-tight">Unwind</h1>
+      </div>
 
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+      <div className="mb-4">
+        <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Reading Level</h2>
+        <div className="space-y-3">
+          {levels.map((level) => (
+            <div 
+              key={level.id}
+              onClick={() => handleLevelChange(level.id)}
+              className={`p-3 rounded-lg cursor-pointer border transition-all duration-200 ${
+                readingLevel === level.id 
+                  ? 'bg-gray-50 border-black shadow-sm ring-1 ring-black' 
+                  : 'bg-white border-gray-200 hover:border-gray-400 hover:bg-gray-50'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className={`font-semibold ${readingLevel === level.id ? 'text-black' : 'text-gray-600'}`}>
+                  {level.id}
+                </span>
+                {readingLevel === level.id && (
+                  <svg className="w-5 h-5 text-black" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                )}
+              </div>
+              <p className="text-xs text-gray-500">{level.description}</p>
+            </div>
+          ))}
         </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+      </div>
+      
+      <div className="text-center mt-6 text-xs text-gray-400 font-medium tracking-wide uppercase">
+        Changes are saved automatically.
+      </div>
+    </div>
+  );
 }
 
-export default App
+export default App;
