@@ -53,14 +53,14 @@ const ContentApp = () => {
     loading: false,
   });
 
-  const fetchTranslation = async (text: string, mode: 'translation' | 'dictionary', context: string) => {
+  const fetchTranslation = async (text: string, mode: 'translation' | 'dictionary', context: string, readingLevel: string) => {
     try {
       const response = await fetch('http://localhost:3000/api/simplify', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ text, mode, context }),
+        body: JSON.stringify({ text, mode, context, readingLevel }),
       });
 
       if (!response.ok) {
@@ -74,6 +74,20 @@ const ContentApp = () => {
         loading: false,
         simplifiedText: data.simplifiedText,
       }));
+
+      // Save to history
+      const historyItem = {
+        original: text,
+        simplified: data.simplifiedText,
+        mode,
+        timestamp: Date.now()
+      };
+      chrome.storage.local.get(['unwindHistory'], (result: any) => {
+        const currentHistory = result.unwindHistory || [];
+        // Keep only last 50 to avoid storage limits
+        const newHistory = [historyItem, ...currentHistory].slice(0, 50);
+        chrome.storage.local.set({ unwindHistory: newHistory });
+      });
     } catch (err) {
       console.error("Unwind API Error:", err);
       setTooltipState(prev => ({
@@ -123,8 +137,11 @@ const ContentApp = () => {
               error: undefined,
             });
 
-            // Trigger the API call
-            fetchTranslation(selectedText, mode, context);
+            // Trigger the API call with reading level
+            chrome.storage.local.get(['readingLevel'], (result: any) => {
+                const currentLevel = result.readingLevel || '8th Grader';
+                fetchTranslation(selectedText, mode, context, currentLevel);
+            });
           }
         }
       }, 500); // 500ms debounce
