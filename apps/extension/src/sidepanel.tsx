@@ -1,6 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
+
+interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
 
 const SidePanel = () => {
   const [tab, setTab] = useState<'current' | 'library'>('current');
@@ -10,6 +15,12 @@ const SidePanel = () => {
   const [error, setError] = useState<string>('');
   const [history, setHistory] = useState<any[]>([]);
 
+  // Chat State
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState<string>('');
+  const [chatLoading, setChatLoading] = useState<boolean>(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
   const loadHistory = () => {
     chrome.storage.local.get(['unwindHistory'], (result: any) => {
       if (result.unwindHistory) setHistory(result.unwindHistory);
@@ -18,7 +29,6 @@ const SidePanel = () => {
 
   useEffect(() => {
     loadHistory();
-    // Listen for storage changes to auto-update library
     const storageListener = (changes: any, namespace: string) => {
         if (namespace === 'local' && changes.unwindHistory) {
             setHistory(changes.unwindHistory.newValue || []);
@@ -28,12 +38,27 @@ const SidePanel = () => {
     return () => chrome.storage.onChanged.removeListener(storageListener);
   }, []);
 
+  // Auto scroll chat
+  useEffect(() => {
+    if (chatEndRef.current) {
+        chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatHistory, chatLoading]);
+
+  const playAudio = () => {
+    if (!simplifiedText) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(simplifiedText);
+    window.speechSynthesis.speak(utterance);
+  };
+
   const fetchTranslation = async (selectedText: string) => {
     if (!selectedText) return;
     
     setLoading(true);
     setSimplifiedText('');
     setError('');
+    setChatHistory([]); // Reset chat for new translation
 
     const wordCount = selectedText.split(/\s+/).filter(word => word.length > 0).length;
     const mode = wordCount <= 3 ? 'dictionary' : 'translation';
@@ -53,7 +78,6 @@ const SidePanel = () => {
         const data = await response.json();
         setSimplifiedText(data.simplifiedText);
 
-        // Save to history
         const historyItem = { original: selectedText, simplified: data.simplifiedText, mode, timestamp: Date.now() };
         chrome.storage.local.get(['unwindHistory'], (histResult: any) => {
           const currentHistory = histResult.unwindHistory || [];
@@ -66,6 +90,43 @@ const SidePanel = () => {
       } finally {
         setLoading(false);
       }
+    });
+  };
+
+  const sendChatMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim() || chatLoading || !simplifiedText) return;
+
+    const userMessage = chatInput.trim();
+    setChatInput('');
+    const newChatHistory: ChatMessage[] = [...chatHistory, { role: 'user', content: userMessage }];
+    setChatHistory(newChatHistory);
+    setChatLoading(true);
+
+    chrome.storage.local.get(['readingLevel'], async (result: any) => {
+        const readingLevel = result.readingLevel || '8th Grader';
+        try {
+            const response = await fetch('http://localhost:3000/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    originalText: text, 
+                    simplifiedText, 
+                    readingLevel, 
+                    chatHistory: newChatHistory 
+                }),
+            });
+
+            if (!response.ok) throw new Error('Chat failed');
+            const data = await response.json();
+            
+            setChatHistory([...newChatHistory, { role: 'assistant', content: data.response }]);
+        } catch (err) {
+            console.error(err);
+            setChatHistory([...newChatHistory, { role: 'assistant', content: "Sorry, I couldn't connect to the server." }]);
+        } finally {
+            setChatLoading(false);
+        }
     });
   };
 
@@ -93,7 +154,7 @@ const SidePanel = () => {
 
   return (
     <div className="p-5 h-screen bg-gray-50 flex flex-col font-sans">
-      <div className="flex items-center justify-between mb-4 border-b border-gray-200 pb-4">
+      <div className="flex items-center justify-between mb-4 border-b border-gray-200 pb-4 shrink-0">
         <h2 className="text-xl font-extrabold text-black tracking-tight uppercase">Unwind</h2>
         
         <div className="flex bg-gray-200 p-1 rounded-lg">
@@ -122,34 +183,82 @@ const SidePanel = () => {
             )}
 
             {text && (
-            <div className="flex-1 overflow-y-auto pr-1 pb-4">
-                {error && (
-                <div className="text-sm text-red-600 bg-red-50 p-4 rounded-xl mb-4 border border-red-100">
-                    <span className="font-bold block mb-1">Error:</span>{error}
-                </div>
-                )}
-
-                {!error && (
-                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 mb-6">
-                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Plain English</h3>
-                    {loading ? (
-                    <div className="flex items-center gap-3 text-black">
-                        <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        <span className="text-sm font-medium animate-pulse">Translating...</span>
+            <div className="flex-1 flex flex-col min-h-0">
+                <div className="flex-1 overflow-y-auto pr-1 pb-4 space-y-4">
+                    {error && (
+                    <div className="text-sm text-red-600 bg-red-50 p-4 rounded-xl border border-red-100">
+                        <span className="font-bold block mb-1">Error:</span>{error}
                     </div>
-                    ) : (
-                    <p className="text-base text-gray-800 leading-relaxed">{simplifiedText}</p>
+                    )}
+
+                    {!error && (
+                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                        <div className="flex items-center justify-between mb-2">
+                            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Plain English</h3>
+                            {!loading && simplifiedText && (
+                                <button onClick={playAudio} className="text-gray-400 hover:text-black transition-colors" aria-label="Play audio" title="Listen to translation">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>
+                                </button>
+                            )}
+                        </div>
+                        {loading ? (
+                        <div className="flex items-center gap-3 text-black">
+                            <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span className="text-sm font-medium animate-pulse">Translating...</span>
+                        </div>
+                        ) : (
+                        <p className="text-base text-gray-800 leading-relaxed">{simplifiedText}</p>
+                        )}
+                    </div>
+                    )}
+
+                    <div className="bg-gray-100 p-4 rounded-xl shrink-0">
+                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Original</h3>
+                        <p className="text-sm text-gray-600 leading-relaxed italic border-l-2 border-gray-300 pl-3 line-clamp-4">{text}</p>
+                    </div>
+
+                    {/* Chat History */}
+                    {chatHistory.length > 0 && (
+                        <div className="space-y-3 pt-4 border-t border-gray-200">
+                            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Tutor Chat</h3>
+                            {chatHistory.map((msg, i) => (
+                                <div key={i} className={`p-3 rounded-xl max-w-[90%] text-sm ${msg.role === 'user' ? 'bg-black text-white self-end ml-auto' : 'bg-gray-100 text-gray-800 border border-gray-200'}`}>
+                                    {msg.content}
+                                </div>
+                            ))}
+                            {chatLoading && (
+                                <div className="p-3 rounded-xl max-w-[90%] text-sm bg-gray-100 text-gray-500 border border-gray-200 animate-pulse w-16">
+                                    ...
+                                </div>
+                            )}
+                            <div ref={chatEndRef} />
+                        </div>
                     )}
                 </div>
-                )}
 
-                <div className="bg-gray-100 p-4 rounded-xl">
-                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Original</h3>
-                    <p className="text-sm text-gray-600 leading-relaxed italic border-l-2 border-gray-300 pl-3">{text}</p>
-                </div>
+                {/* Chat Input */}
+                {!loading && simplifiedText && (
+                    <form onSubmit={sendChatMessage} className="mt-2 shrink-0 relative">
+                        <input
+                            type="text"
+                            value={chatInput}
+                            onChange={(e) => setChatInput(e.target.value)}
+                            placeholder="Ask a follow-up question..."
+                            className="w-full bg-white border border-gray-300 text-gray-900 text-sm rounded-full focus:ring-black focus:border-black block px-4 py-3 pr-10 shadow-sm outline-none transition-all"
+                            disabled={chatLoading}
+                        />
+                        <button 
+                            type="submit" 
+                            disabled={!chatInput.trim() || chatLoading}
+                            className="absolute right-2 top-1.5 p-1.5 bg-black text-white rounded-full hover:bg-gray-800 disabled:opacity-50 disabled:hover:bg-black transition-colors"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                        </button>
+                    </form>
+                )}
             </div>
             )}
         </>
