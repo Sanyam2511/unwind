@@ -104,7 +104,44 @@ app.post('/api/simplify', async (req, res) => {
 
     } catch (error) {
         console.error("❌ Groq API Error:", error);
-        res.status(500).json({ error: "Failed to generate translation from AI provider." });
+        res.status(500).json({ error: 'Failed to simplify text' });
+    }
+});
+
+app.post('/api/chat', async (req, res) => {
+    const { originalText, simplifiedText, readingLevel = '8th Grader', chatHistory = [] } = req.body;
+    
+    if (!originalText || !chatHistory.length) {
+        return res.status(400).json({ error: 'Missing required chat parameters' });
+    }
+
+    const systemPrompt = `You are the Unwind Tutor. The user is asking follow-up questions about a confusing text they just translated.
+Original Text: "${sanitizeText(originalText)}"
+Simplified Translation: "${sanitizeText(simplifiedText)}"
+Target Audience Level: ${readingLevel}
+
+Answer their questions clearly, concisely, and directly. Do not use pleasantries. Match your vocabulary to the target audience level.`;
+
+    try {
+        const messages = [
+            { role: "system", content: systemPrompt },
+            ...chatHistory.map(msg => ({
+                role: msg.role === 'user' ? 'user' : 'assistant',
+                content: sanitizeText(msg.content)
+            }))
+        ];
+
+        const chatCompletion = await groq.chat.completions.create({
+            messages,
+            model: "llama-3.3-70b-versatile",
+            temperature: 0.3,
+            max_tokens: 500
+        });
+
+        res.json({ response: chatCompletion.choices[0]?.message?.content || "" });
+    } catch (error) {
+        console.error("Groq Chat API Error:", error);
+        res.status(500).json({ error: 'Failed to generate chat response' });
     }
 });
 
