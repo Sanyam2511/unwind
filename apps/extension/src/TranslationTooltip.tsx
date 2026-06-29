@@ -13,6 +13,13 @@ interface TranslationTooltipProps {
 export const TranslationTooltip: React.FC<TranslationTooltipProps> = ({ 
   x, y, text, simplifiedText, loading, error, onClose 
 }) => {
+  const playAudio = () => {
+    if (!simplifiedText) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(simplifiedText);
+    window.speechSynthesis.speak(utterance);
+  };
+
   return (
     <div
       className="absolute z-[999999] w-80 bg-white/95 backdrop-blur-md border border-gray-200 shadow-xl rounded-2xl p-5 text-gray-800 font-sans animate-in fade-in zoom-in-95 duration-200"
@@ -54,7 +61,12 @@ export const TranslationTooltip: React.FC<TranslationTooltipProps> = ({
             <span className="text-gray-400 animate-pulse">Translating complex text into plain English...</span>
           ) : (
             <>
-              <span className="font-semibold text-gray-900 block mb-1">Plain English:</span> 
+              <div className="flex items-center gap-2 mb-1">
+                <span className="font-semibold text-gray-900">Plain English:</span> 
+                <button onClick={playAudio} className="text-gray-400 hover:text-black transition-colors" aria-label="Play audio" title="Listen to translation">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>
+                </button>
+              </div>
               <span className="text-gray-700">{simplifiedText}</span>
             </>
           )}
