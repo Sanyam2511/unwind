@@ -145,6 +145,33 @@ Answer their questions clearly, concisely, and directly. Do not use pleasantries
     }
 });
 
+app.post('/api/summarize', async (req, res) => {
+    const { text, readingLevel = '8th Grader' } = req.body;
+    if (!text) return res.status(400).json({ error: 'Text is required' });
+
+    const systemPrompt = `You are the Unwind Page Summarizer. Your goal is to take the provided webpage text and generate a highly concise, 3-bullet point "TL;DR" summary.
+Target Audience Level: ${readingLevel}
+
+Use plain language appropriate for the audience level. Do not use pleasantries. Output exactly 3 bullet points starting with standard markdown dashes (-).`;
+
+    try {
+        const chatCompletion = await groq.chat.completions.create({
+            messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: sanitizeText(text) }
+            ],
+            model: "llama-3.3-70b-versatile",
+            temperature: 0.2,
+            max_tokens: 400
+        });
+
+        res.json({ summary: chatCompletion.choices[0]?.message?.content || "" });
+    } catch (error) {
+        console.error("Groq Summarize API Error:", error);
+        res.status(500).json({ error: 'Failed to generate summary' });
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`Unwind Server running on http://localhost:${PORT}`);
     console.log(`Using Groq API: ${process.env.GROQ_API_KEY ? 'Configured ✅' : 'Missing ❌'}`);
