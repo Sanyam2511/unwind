@@ -4,6 +4,11 @@ chrome.runtime.onInstalled.addListener(() => {
     title: "Unwind Translation",
     contexts: ["selection"]
   });
+  chrome.contextMenus.create({
+    id: "unwind-image",
+    title: "Unwind Image Text",
+    contexts: ["image"]
+  });
 });
 
 chrome.contextMenus.onClicked.addListener((info: any, tab: any) => {
@@ -16,6 +21,14 @@ chrome.contextMenus.onClicked.addListener((info: any, tab: any) => {
         chrome.sidePanel.open({ windowId: tab.windowId });
         // Also send a message in case the side panel is already open and doesn't reload
         chrome.runtime.sendMessage({ type: "UNWIND_TEXT", text });
+      });
+    }
+  } else if (info.menuItemId === "unwind-image") {
+    const imageUrl = info.srcUrl;
+    if (tab && imageUrl) {
+      chrome.storage.local.set({ unwindImage: imageUrl }, () => {
+        chrome.sidePanel.open({ windowId: tab.windowId });
+        chrome.runtime.sendMessage({ type: "UNWIND_IMAGE", imageUrl });
       });
     }
   }
