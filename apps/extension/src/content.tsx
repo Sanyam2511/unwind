@@ -155,12 +155,23 @@ const ContentApp = () => {
       }
     };
 
+    const handleMessage = (message: any, _sender: any, sendResponse: any) => {
+      if (message.action === 'GET_PAGE_TEXT') {
+        const paragraphs = Array.from(document.querySelectorAll('p')).map(p => p.textContent?.trim() || '');
+        const text = paragraphs.filter(p => p.length > 20).join('\n\n').substring(0, 10000);
+        sendResponse({ text });
+      }
+      return true;
+    };
+
     document.addEventListener('mouseup', handleMouseUp);
     document.addEventListener('mousedown', handleMouseDown);
+    chrome.runtime.onMessage.addListener(handleMessage);
 
     return () => {
       document.removeEventListener('mouseup', handleMouseUp);
       document.removeEventListener('mousedown', handleMouseDown);
+      chrome.runtime.onMessage.removeListener(handleMessage);
       clearTimeout(debounceTimer);
     };
   }, []);

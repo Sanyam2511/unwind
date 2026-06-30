@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
+import Tesseract from 'tesseract.js';
 import './index.css';
 
 interface ChatMessage {
@@ -14,6 +15,10 @@ const SidePanel = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
   const [history, setHistory] = useState<any[]>([]);
+
+  // Page Summary State
+  const [summaryText, setSummaryText] = useState<string>('');
+  const [summaryLoading, setSummaryLoading] = useState<boolean>(false);
 
   // Chat State
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
@@ -45,11 +50,75 @@ const SidePanel = () => {
     }
   }, [chatHistory, chatLoading]);
 
-  const playAudio = () => {
-    if (!simplifiedText) return;
+  const playAudio = (textToPlay: string) => {
+    if (!textToPlay) return;
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(simplifiedText);
+    const utterance = new SpeechSynthesisUtterance(textToPlay);
     window.speechSynthesis.speak(utterance);
+  };
+
+  const summarizePage = async () => {
+      setSummaryLoading(true);
+      setError('');
+      setSummaryText('');
+      setSimplifiedText('');
+      setText('');
+
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+          if (tabs[0] && tabs[0].id) {
+              chrome.tabs.sendMessage(tabs[0].id, { action: 'GET_PAGE_TEXT' }, async (response) => {
+                  if (!response || !response.text) {
+                      setSummaryLoading(false);
+                      setError("Could not extract text from this page.");
+                      return;
+                  }
+
+                  chrome.storage.local.get(['readingLevel'], async (result: any) => {
+                      const readingLevel = result.readingLevel || '8th Grader';
+                      try {
+                          const apiRes = await fetch('http://localhost:3000/api/summarize', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ text: response.text, readingLevel }),
+                          });
+
+                          if (!apiRes.ok) throw new Error('Summary failed');
+                          const data = await apiRes.json();
+                          setSummaryText(data.summary);
+                      } catch (err) {
+                          console.error(err);
+                          setError("Failed to summarize the page.");
+                      } finally {
+                          setSummaryLoading(false);
+                      }
+                  });
+              });
+          } else {
+              setSummaryLoading(false);
+              setError("No active tab found.");
+          }
+      });
+  };
+
+  const processImage = async (imageUrl: string) => {
+      setLoading(true);
+      setError('');
+      setSummaryText('');
+      setText("Scanning image for text...");
+
+      try {
+          const { data: { text: extractedText } } = await Tesseract.recognize(imageUrl, 'eng');
+          if (!extractedText || extractedText.trim().length < 2) {
+              throw new Error("No readable text found in the image.");
+          }
+          setText(extractedText.trim());
+          fetchTranslation(extractedText.trim());
+      } catch (err) {
+          console.error(err);
+          setError("Failed to read text from the image.");
+          setLoading(false);
+          setText('');
+      }
   };
 
   const fetchTranslation = async (selectedText: string) => {
@@ -57,6 +126,7 @@ const SidePanel = () => {
     
     setLoading(true);
     setSimplifiedText('');
+    setSummaryText('');
     setError('');
     setChatHistory([]); // Reset chat for new translation
 
@@ -131,12 +201,16 @@ const SidePanel = () => {
   };
 
   useEffect(() => {
-    chrome.storage.local.get(['unwindSelection'], (result: any) => {
+    chrome.storage.local.get(['unwindSelection', 'unwindImage'], (result: any) => {
       if (result.unwindSelection) {
         setText(result.unwindSelection);
         setTab('current');
         fetchTranslation(result.unwindSelection);
         chrome.storage.local.remove(['unwindSelection']);
+      } else if (result.unwindImage) {
+        setTab('current');
+        processImage(result.unwindImage);
+        chrome.storage.local.remove(['unwindImage']);
       }
     });
 
@@ -145,6 +219,9 @@ const SidePanel = () => {
         setText(message.text);
         setTab('current');
         fetchTranslation(message.text);
+      } else if (message.type === 'UNWIND_IMAGE' && message.imageUrl) {
+        setTab('current');
+        processImage(message.imageUrl);
       }
     };
 
@@ -175,28 +252,53 @@ const SidePanel = () => {
 
       {tab === 'current' && (
         <>
-            {!text && !loading && (
+            <div className="mb-4 shrink-0">
+                <button onClick={summarizePage} disabled={summaryLoading || loading} className="w-full py-2.5 bg-black hover:bg-gray-800 text-white font-bold rounded-xl text-sm transition-colors shadow-sm flex items-center justify-center gap-2 disabled:opacity-50">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                    {summaryLoading ? "Summarizing Page..." : "TL;DR Summarize Page"}
+                </button>
+            </div>
+
+            {!text && !loading && !summaryText && !summaryLoading && (
             <div className="flex-1 flex flex-col items-center justify-center text-center text-gray-400">
                 <svg className="w-12 h-12 mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
-                <p className="text-sm px-4">Highlight text, right-click, and select <strong>"Unwind Translation"</strong> to see it here.</p>
+                <p className="text-sm px-4">Highlight text or right-click an image and select <strong>"Unwind"</strong>.</p>
             </div>
             )}
 
-            {text && (
+            {error && (
+            <div className="text-sm text-red-600 bg-red-50 p-4 rounded-xl border border-red-100 mb-4 shrink-0">
+                <span className="font-bold block mb-1">Error:</span>{error}
+            </div>
+            )}
+
+            {/* Page Summary View */}
+            {summaryText && !error && (
+                <div className="flex-1 overflow-y-auto pr-1 pb-4">
+                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 mb-6">
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Page Summary</h3>
+                            <button onClick={() => playAudio(summaryText)} className="text-gray-400 hover:text-black transition-colors" aria-label="Play audio" title="Listen to summary">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>
+                            </button>
+                        </div>
+                        <div className="text-base text-gray-800 leading-relaxed whitespace-pre-wrap">
+                            {summaryText}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Translation View */}
+            {text && !summaryText && (
             <div className="flex-1 flex flex-col min-h-0">
                 <div className="flex-1 overflow-y-auto pr-1 pb-4 space-y-4">
-                    {error && (
-                    <div className="text-sm text-red-600 bg-red-50 p-4 rounded-xl border border-red-100">
-                        <span className="font-bold block mb-1">Error:</span>{error}
-                    </div>
-                    )}
-
                     {!error && (
                     <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
                         <div className="flex items-center justify-between mb-2">
                             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Plain English</h3>
                             {!loading && simplifiedText && (
-                                <button onClick={playAudio} className="text-gray-400 hover:text-black transition-colors" aria-label="Play audio" title="Listen to translation">
+                                <button onClick={() => playAudio(simplifiedText)} className="text-gray-400 hover:text-black transition-colors" aria-label="Play audio" title="Listen to translation">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>
                                 </button>
                             )}
@@ -207,7 +309,7 @@ const SidePanel = () => {
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                             </svg>
-                            <span className="text-sm font-medium animate-pulse">Translating...</span>
+                            <span className="text-sm font-medium animate-pulse">{text === "Scanning image for text..." ? "Running OCR..." : "Translating..."}</span>
                         </div>
                         ) : (
                         <p className="text-base text-gray-800 leading-relaxed">{simplifiedText}</p>
