@@ -34,9 +34,9 @@ const SidePanel = () => {
 
   useEffect(() => {
     loadHistory();
-    const storageListener = (changes: any, namespace: string) => {
+    const storageListener = (changes: { [key: string]: chrome.storage.StorageChange }, namespace: string) => {
         if (namespace === 'local' && changes.unwindHistory) {
-            setHistory(changes.unwindHistory.newValue || []);
+            setHistory((changes.unwindHistory.newValue as any[]) || []);
         }
     };
     chrome.storage.onChanged.addListener(storageListener);
@@ -130,7 +130,7 @@ const SidePanel = () => {
     setError('');
     setChatHistory([]); // Reset chat for new translation
 
-    const wordCount = selectedText.split(/\s+/).filter(word => word.length > 0).length;
+    const wordCount = selectedText.trim().split(/\s+/).length;
     const mode = wordCount <= 3 ? 'dictionary' : 'translation';
 
     chrome.storage.local.get(['readingLevel'], async (result: any) => {

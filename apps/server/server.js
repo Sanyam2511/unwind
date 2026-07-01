@@ -17,11 +17,11 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 // In-memory cache: Hash -> { originalText, simplifiedText }
 const mockDatabase = new Map();
 
-// Mock Sanitization
 function sanitizeText(text) {
+    if (!text) return '';
     let sanitized = text.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[EMAIL REDACTED]');
     sanitized = sanitized.replace(/\d{3}-\d{2}-\d{4}/g, '[SSN REDACTED]');
-    return sanitized;
+    return sanitized.trim();
 }
 
 function generateHash(text) {
@@ -38,7 +38,6 @@ app.post('/api/simplify', async (req, res) => {
 
     // 1. Check Cache
     if (mockDatabase.has(hash)) {
-        console.log(`⚡ [CACHE HIT] Hash: ${hash.substring(0, 8)}... - Returned instantly (0ms)`);
         return res.json({
             success: true,
             source: 'cache',
@@ -47,8 +46,6 @@ app.post('/api/simplify', async (req, res) => {
         });
     }
 
-    console.log(`⏳ [CACHE MISS] Hash: ${hash.substring(0, 8)}... - Requesting translation from Groq...`);
-    
     // 2. Sanitize Data
     const sanitizedText = sanitizeText(text);
     const sanitizedContext = sanitizeText(context);

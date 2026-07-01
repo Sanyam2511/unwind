@@ -4,7 +4,7 @@ import { TranslationTooltip } from './TranslationTooltip';
 // Import CSS inline to inject into Shadow DOM
 import cssText from './index.css?inline';
 
-console.log("Unwind Extension Content Script Loaded.");
+
 
 // Create the host element for the Shadow DOM
 const hostElement = document.createElement('div');
@@ -109,15 +109,10 @@ const ContentApp = () => {
         const selectedText = selection?.toString().trim();
 
         if (selectedText && selectedText.length > 2) {
-          // Determine mode based on word count
-          const wordCount = selectedText.split(/\s+/).filter(word => word.length > 0).length;
+          const wordCount = selectedText.trim().split(/\s+/).length;
           const mode = wordCount <= 3 ? 'dictionary' : 'translation';
 
-          // Extract surrounding context
-          let context = selectedText;
-          if (selection && selection.anchorNode && selection.anchorNode.textContent) {
-              context = selection.anchorNode.textContent.trim();
-          }
+          let context = selection?.anchorNode?.textContent?.trim() || selectedText;
 
           // Calculate where to place the tooltip
           const range = selection?.getRangeAt(0);
