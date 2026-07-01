@@ -4,19 +4,30 @@
 
 Unwind is a browser extension designed to act as a real-time translator for complex language on the internet. It instantly converts intimidating jargon, corporate doublespeak, and dense legal or medical text into plain, everyday English directly on the webpage you are reading.
 
-Instead of forcing users to open separate tabs to search for definitions, open dictionaries, or copy-paste pages into search engines, Unwind clarifies difficult text seamlessly via an inline tooltip.
+Instead of forcing users to open separate tabs to search for definitions, open dictionaries, or copy-paste pages into search engines, Unwind clarifies difficult text seamlessly via inline tooltips and an interactive Companion Side Panel.
+
+## Features
+
+- **Contextual Translation Tooltip:** Highlight any dense paragraph and instantly see a plain English translation hover right above it.
+- **Contextual Dictionary:** Highlight a single word (1-3 words), and Unwind will define it exactly as it's being used in that specific sentence context.
+- **Reading Level Slider:** Adjust the AI's vocabulary output. Choose between "Explain Like I'm 5", "8th Grader", or "Professional".
+- **Tutor Mode (Interactive Chat):** Have follow-up questions about a translation? Ask the AI Tutor directly in the Side Panel, and it will respond based on the context of the text you just read.
+- **Text-to-Speech (Audio Reader):** Click the speaker icon to have the browser read the simplified translation out loud to you.
+- **TL;DR Page Summarizer:** Click one button to instantly generate a concise, 3-bullet point summary of an entire web page.
+- **Image Text Recognition (OCR):** Right-click any image on the web and select "Unwind Image Text" to extract and simplify the text locked inside the pixels.
+- **Unwind Library:** Access your history of past translations and definitions locally in the Side Panel.
 
 ## Architecture
 
 The project follows a scalable client-server architecture:
 
-1. **Frontend Extension (Client):** A Chrome Extension that tracks user text selection and injects a Shadow DOM element to display the translation tooltip. The Shadow DOM ensures that the host page's CSS does not interfere with the extension's UI.
-2. **Backend Interceptor (Server):** A Node.js/Express server that handles incoming translation requests. It features a SHA-256 caching layer to prevent duplicate API calls for identical text strings, optimizing performance and reducing external API costs.
+1. **Frontend Extension (Client):** A Chrome Extension that tracks user text selection and injects a Shadow DOM element to display the translation tooltip. It also utilizes Chrome's Side Panel API for advanced features (Chat, TL;DR, OCR).
+2. **Backend Interceptor (Server):** A Node.js/Express server that handles incoming translation, chat, and summarization requests. It features a SHA-256 caching layer to prevent duplicate API calls for identical text strings.
 3. **AI Engine:** Integration with the Groq API (Llama 3) to process and simplify text with near-zero latency.
 
 ## Tech Stack
 
-- **Frontend:** React, TypeScript, Vite, Tailwind CSS v4, CRXJS
+- **Frontend:** React, TypeScript, Vite, Tailwind CSS v4, CRXJS, Tesseract.js (OCR)
 - **Backend:** Node.js, Express, Crypto (SHA-256 Hashing)
 - **AI Integration:** Groq SDK
 
@@ -72,6 +83,7 @@ Ensure you have Node.js (v18 or higher) and npm installed on your local machine.
 ## Usage
 
 1. Ensure the backend server is running locally.
-2. Navigate to any web page containing complex text (e.g., a Terms of Service agreement or a medical journal).
-3. Use your mouse to highlight a sentence or paragraph.
-4. Release the mouse. After a brief delay, the Unwind tooltip will automatically appear below the text, providing a simplified translation.
+2. Navigate to any web page containing complex text.
+3. **To Translate:** Highlight a sentence or paragraph and wait a moment for the tooltip, or right-click and select "Unwind Translation" to open the Companion Side Panel.
+4. **To Summarize:** Open the Side Panel and click "TL;DR Summarize Page".
+5. **To Read Images:** Right-click any image and select "Unwind Image Text".
