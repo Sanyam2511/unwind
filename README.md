@@ -87,3 +87,9 @@ Ensure you have Node.js (v18 or higher) and npm installed on your local machine.
 3. **To Translate:** Highlight a sentence or paragraph and wait a moment for the tooltip, or right-click and select "Unwind Translation" to open the Companion Side Panel.
 4. **To Summarize:** Open the Side Panel and click "TL;DR Summarize Page".
 5. **To Read Images:** Right-click any image and select "Unwind Image Text".
+
+## Future Roadmap
+
+- ☁️ **Cloud Database:** Migrate local cache to MongoDB Atlas.
+- 🌍 **Multi-Language Support:** Allow translating jargon directly into other languages.
+- 📊 **Literacy Analytics:** Track words read and time saved in a user dashboard.
