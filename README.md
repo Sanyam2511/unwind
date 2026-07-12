@@ -1,5 +1,9 @@
 # Unwind - Contextual Literacy Engine
 
+> **Check out the extension in action!**  
+> ![Demo Video/GIF Placeholder](https://via.placeholder.com/800x400?text=Insert+Demo+GIF+Here)  
+> *(Replace the image link above with a short screen recording or GIF of the extension working)*
+
 ## Overview
 
 Unwind is a browser extension designed to act as a real-time translator for complex language on the internet. It instantly converts intimidating jargon, corporate doublespeak, and dense legal or medical text into plain, everyday English directly on the webpage you are reading.
@@ -75,8 +79,11 @@ Ensure you have Node.js (v18 or higher) and npm installed on your local machine.
 
 ### 3. Loading the Extension in Chrome
 
-1. Open Google Chrome and navigate to `chrome://extensions/`.
-2. Toggle "Developer mode" on in the top right corner.
+**Note for Portfolio Reviewers:** This extension is currently distributed for free via GitHub Developer Mode.
+
+1. **Clone or Download** this repository to your local machine.
+2. Open Google Chrome and navigate to `chrome://extensions/`.
+3. Toggle "Developer mode" on in the top right corner.
 3. Click "Load unpacked" in the top left corner.
 4. Select the `apps/extension/dist` folder from this repository.
 
