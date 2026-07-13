@@ -1,12 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
-import Tesseract from 'tesseract.js';
+import OcrWorker from './workers/ocrWorker?worker';
+import { fetchTranslationFromAPI, summarizePageAPI, sendChatMessageAPI } from './api';
+import type { ChatMessage } from './api';
 import './index.css';
-
-interface ChatMessage {
-  role: 'user' | 'assistant';
-  content: string;
-}
 
 const SidePanel = () => {
   const [tab, setTab] = useState<'current' | 'library'>('current');
@@ -76,14 +73,7 @@ const SidePanel = () => {
                   chrome.storage.local.get(['readingLevel'], async (result: any) => {
                       const readingLevel = result.readingLevel || '8th Grader';
                       try {
-                          const apiRes = await fetch('http://localhost:3000/api/summarize', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ text: response.text, readingLevel }),
-                          });
-
-                          if (!apiRes.ok) throw new Error('Summary failed');
-                          const data = await apiRes.json();
+                          const data = await summarizePageAPI(response.text, readingLevel);
                           setSummaryText(data.summary);
                       } catch (err) {
                           console.error(err);
@@ -107,12 +97,31 @@ const SidePanel = () => {
       setText("Scanning image for text...");
 
       try {
-          const { data: { text: extractedText } } = await Tesseract.recognize(imageUrl, 'eng');
-          if (!extractedText || extractedText.trim().length < 2) {
-              throw new Error("No readable text found in the image.");
-          }
-          setText(extractedText.trim());
-          fetchTranslation(extractedText.trim());
+          const worker = new OcrWorker();
+          
+          worker.onmessage = (e) => {
+              const { success, text: extractedText, error } = e.data;
+              if (success && extractedText && extractedText.trim().length >= 2) {
+                  setText(extractedText.trim());
+                  fetchTranslation(extractedText.trim());
+              } else {
+                  console.error(error);
+                  setError(error || "No readable text found in the image.");
+                  setLoading(false);
+                  setText('');
+              }
+              worker.terminate();
+          };
+
+          worker.onerror = (err) => {
+              console.error(err);
+              setError("Failed to initialize OCR worker.");
+              setLoading(false);
+              setText('');
+              worker.terminate();
+          };
+
+          worker.postMessage({ imageUrl });
       } catch (err) {
           console.error(err);
           setError("Failed to read text from the image.");
@@ -137,15 +146,7 @@ const SidePanel = () => {
       const readingLevel = result.readingLevel || '8th Grader';
 
       try {
-        const response = await fetch('http://localhost:3000/api/simplify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: selectedText, mode, context: selectedText, readingLevel }),
-        });
-
-        if (!response.ok) throw new Error('Failed to fetch translation');
-
-        const data = await response.json();
+        const data = await fetchTranslationFromAPI(selectedText, mode, selectedText, readingLevel);
         setSimplifiedText(data.simplifiedText);
 
         const historyItem = { original: selectedText, simplified: data.simplifiedText, mode, timestamp: Date.now() };
@@ -176,20 +177,7 @@ const SidePanel = () => {
     chrome.storage.local.get(['readingLevel'], async (result: any) => {
         const readingLevel = result.readingLevel || '8th Grader';
         try {
-            const response = await fetch('http://localhost:3000/api/chat', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    originalText: text, 
-                    simplifiedText, 
-                    readingLevel, 
-                    chatHistory: newChatHistory 
-                }),
-            });
-
-            if (!response.ok) throw new Error('Chat failed');
-            const data = await response.json();
-            
+            const data = await sendChatMessageAPI(text, simplifiedText, readingLevel, newChatHistory);
             setChatHistory([...newChatHistory, { role: 'assistant', content: data.response }]);
         } catch (err) {
             console.error(err);
