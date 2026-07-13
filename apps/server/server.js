@@ -3,19 +3,69 @@ import cors from 'cors';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
 import Groq from 'groq-sdk';
+import sqlite3 from 'sqlite3';
+import rateLimit from 'express-rate-limit';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
+// Security: Rate Limiting
+// Limit each IP to 100 requests per 15 minutes
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: { error: 'Too many requests, please try again later.' }
+});
+
+// Apply rate limiting to all /api/ routes
+app.use('/api/', limiter);
+
+// Security: CORS Configuration
+// In production, you would restrict this to your extension's origin
+const corsOptions = {
+    origin: '*', // For development. E.g., 'chrome-extension://<your-extension-id>'
+    optionsSuccessStatus: 200
+};
+app.use(cors(corsOptions));
 app.use(express.json());
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-// In-memory cache: Hash -> { originalText, simplifiedText }
-const mockDatabase = new Map();
+// Database Setup: SQLite for persistent caching
+const db = new sqlite3.Database('./cache.db', (err) => {
+    if (err) {
+        console.error('Error opening database', err.message);
+    } else {
+        db.run(`CREATE TABLE IF NOT EXISTS cache (
+            hash TEXT PRIMARY KEY,
+            originalText TEXT,
+            simplifiedText TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
+        console.log('SQLite database initialized for caching.');
+    }
+});
+
+function getFromCache(hash) {
+    return new Promise((resolve, reject) => {
+        db.get('SELECT * FROM cache WHERE hash = ?', [hash], (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+        });
+    });
+}
+
+function saveToCache(hash, originalText, simplifiedText) {
+    db.run(
+        'INSERT OR REPLACE INTO cache (hash, originalText, simplifiedText) VALUES (?, ?, ?)',
+        [hash, originalText, simplifiedText],
+        (err) => {
+            if (err) console.error('Error saving to cache:', err.message);
+        }
+    );
+}
 
 function sanitizeText(text) {
     if (!text) return '';
@@ -36,47 +86,42 @@ app.post('/api/simplify', async (req, res) => {
 
     const hash = generateHash(readingLevel + ":" + mode + ":" + text);
 
-    // 1. Check Cache
-    if (mockDatabase.has(hash)) {
-        return res.json({
-            success: true,
-            source: 'cache',
-            originalText: text,
-            simplifiedText: mockDatabase.get(hash).simplifiedText
-        });
-    }
-
-    // 2. Sanitize Data
-    const sanitizedText = sanitizeText(text);
-    const sanitizedContext = sanitizeText(context);
-
-    let systemPrompt = "You are the 'Contextual Literacy Engine', an expert at translating dense legal, medical, financial, or corporate jargon into simple, plain English that an 8th grader can understand. Your output will be displayed in a tiny tooltip hovering over text. Be extremely concise. Do not use pleasantries. Do not start with 'This means'. Just output the direct, plain English translation of the user's text.";
-
-    if (readingLevel === "Explain Like I'm 5") {
-        systemPrompt = "You are an expert at explaining incredibly complex concepts to a 5-year-old child. Translate the provided text into extremely basic language, using simple analogies where helpful. Your output will be displayed in a tiny tooltip. Be concise. Do not use pleasantries. Just output the translation.";
-    } else if (readingLevel === "Professional") {
-        systemPrompt = "You are an expert analyst. Provide a highly concise, professional summary of the text without losing critical nuances or industry terms. Your output will be displayed in a tiny tooltip. Be direct. Do not use pleasantries. Just output the summary.";
-    }
-
-    let userPrompt = sanitizedText;
-
-    if (mode === 'dictionary') {
-        systemPrompt = `You are the 'Contextual Dictionary Engine'. The user will provide a specific word or short phrase, followed by the surrounding sentence for context. Your job is to provide a very brief, simple definition of that word exactly as it is being used in that specific context (Target Audience Level: ${readingLevel}). Be extremely concise. Do not use pleasantries. Just output the definition.`;
-        userPrompt = `Word/Phrase: "${sanitizedText}"\n\nContext Sentence: "${sanitizedContext}"`;
-    }
-
     try {
+        // 1. Check Cache
+        const cachedResult = await getFromCache(hash);
+        if (cachedResult) {
+            return res.json({
+                success: true,
+                source: 'cache',
+                originalText: text,
+                simplifiedText: cachedResult.simplifiedText
+            });
+        }
+
+        // 2. Sanitize Data
+        const sanitizedText = sanitizeText(text);
+        const sanitizedContext = sanitizeText(context);
+
+        let systemPrompt = "You are the 'Contextual Literacy Engine', an expert at translating dense legal, medical, financial, or corporate jargon into simple, plain English that an 8th grader can understand. Your output will be displayed in a tiny tooltip hovering over text. Be extremely concise. Do not use pleasantries. Do not start with 'This means'. Just output the direct, plain English translation of the user's text.";
+
+        if (readingLevel === "Explain Like I'm 5") {
+            systemPrompt = "You are an expert at explaining incredibly complex concepts to a 5-year-old child. Translate the provided text into extremely basic language, using simple analogies where helpful. Your output will be displayed in a tiny tooltip. Be concise. Do not use pleasantries. Just output the translation.";
+        } else if (readingLevel === "Professional") {
+            systemPrompt = "You are an expert analyst. Provide a highly concise, professional summary of the text without losing critical nuances or industry terms. Your output will be displayed in a tiny tooltip. Be direct. Do not use pleasantries. Just output the summary.";
+        }
+
+        let userPrompt = sanitizedText;
+
+        if (mode === 'dictionary') {
+            systemPrompt = `You are the 'Contextual Dictionary Engine'. The user will provide a specific word or short phrase, followed by the surrounding sentence for context. Your job is to provide a very brief, simple definition of that word exactly as it is being used in that specific context (Target Audience Level: ${readingLevel}). Be extremely concise. Do not use pleasantries. Just output the definition.`;
+            userPrompt = `Word/Phrase: "${sanitizedText}"\n\nContext Sentence: "${sanitizedContext}"`;
+        }
+
         // 3. Call AI API
         const chatCompletion = await groq.chat.completions.create({
             messages: [
-                {
-                    role: "system",
-                    content: systemPrompt
-                },
-                {
-                    role: "user",
-                    content: userPrompt
-                }
+                { role: "system", content: systemPrompt },
+                { role: "user", content: userPrompt }
             ],
             model: "llama-3.3-70b-versatile",
             temperature: 0.3,
@@ -86,10 +131,7 @@ app.post('/api/simplify', async (req, res) => {
         const simplifiedText = chatCompletion.choices[0]?.message?.content || "Translation failed.";
 
         // 4. Save to Cache
-        mockDatabase.set(hash, {
-            originalText: text,
-            simplifiedText: simplifiedText
-        });
+        saveToCache(hash, text, simplifiedText);
 
         // 5. Serve Response
         res.json({
