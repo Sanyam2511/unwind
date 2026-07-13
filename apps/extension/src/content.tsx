@@ -3,8 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { TranslationTooltip } from './TranslationTooltip';
 // Import CSS inline to inject into Shadow DOM
 import cssText from './index.css?inline';
-
-
+import { fetchTranslationFromAPI } from './api';
 
 // Create the host element for the Shadow DOM
 const hostElement = document.createElement('div');
@@ -55,19 +54,7 @@ const ContentApp = () => {
 
   const fetchTranslation = async (text: string, mode: 'translation' | 'dictionary', context: string, readingLevel: string) => {
     try {
-      const response = await fetch('http://localhost:3000/api/simplify', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ text, mode, context, readingLevel }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch translation from server');
-      }
-
-      const data = await response.json();
+      const data = await fetchTranslationFromAPI(text, mode, context, readingLevel);
       
       setTooltipState(prev => ({
         ...prev,
